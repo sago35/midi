@@ -12,6 +12,7 @@ type Midi struct {
 	buf [256]byte
 
 	trackPos [16]int64
+	trackNum int
 }
 
 type Reader interface {
@@ -29,25 +30,21 @@ func New(r Reader) *Midi {
 func (m *Midi) ParseHeader() error {
 	var value [4]byte
 	binary.Read(m.r, binary.BigEndian, &value)
-	fmt.Printf("%s\n", value)
+	//fmt.Printf("%s\n", value)
 
 	var size uint32
 	binary.Read(m.r, binary.BigEndian, &size)
-	fmt.Printf("size   : %04X\n", size)
 
 	var format uint16
 	binary.Read(m.r, binary.BigEndian, &format)
-	fmt.Printf("format : %04X\n", format)
 
 	var trackNum uint16
 	binary.Read(m.r, binary.BigEndian, &trackNum)
-	fmt.Printf("tracks : %04X\n", trackNum)
+	m.trackNum = int(trackNum)
 
 	var ticks uint16
 	binary.Read(m.r, binary.BigEndian, &ticks)
-	fmt.Printf("ticks  : %04X\n", ticks)
 
-	fmt.Printf("\n")
 	cont := true
 	idx := 0
 	for cont {
@@ -75,18 +72,11 @@ func (m *Midi) ParseHeader() error {
 }
 
 func (m *Midi) TrackNum() int {
-	num := 0
-	for i, ofs := range m.trackPos {
-		if ofs == 0 {
-			break
-		}
-		num = i
-	}
-	return num + 1
+	return m.trackNum
 }
 
 func (m *Midi) ParseTrack(no int) error {
-	fmt.Printf("-- track %d --\n", no)
+	//fmt.Printf("-- track %d --\n", no)
 
 	if len(m.trackPos) < no {
 		return fmt.Errorf("len(m.trackPos) < no")
@@ -95,11 +85,11 @@ func (m *Midi) ParseTrack(no int) error {
 
 	var mtrk [4]byte
 	binary.Read(m.r, binary.BigEndian, &mtrk)
-	fmt.Printf("%s\n", mtrk)
+	//fmt.Printf("%s\n", mtrk)
 
 	var size uint32
 	binary.Read(m.r, binary.BigEndian, &size)
-	fmt.Printf("size   : %04X\n", size)
+	//fmt.Printf("size   : %04X\n", size)
 
 	remain := size
 	var buf [256]byte
@@ -108,12 +98,13 @@ func (m *Midi) ParseTrack(no int) error {
 
 		delta := uint16(buf[0])
 		if delta&0x80 == 0x00 {
-			fmt.Printf("buf  : % X\n", buf[:4])
+			//fmt.Printf("buf  : % X\n", buf[:4])
 		} else {
 			m.r.Seek(-3, io.SeekCurrent)
 
 			binary.Read(m.r, binary.BigEndian, buf[:4])
-			fmt.Printf("buf  : %02X % X\n", delta, buf[:4])
+			//fmt.Printf("buf  : %02X % X\n", delta, buf[:4])
+			remain -= 1
 		}
 
 		switch buf[1] {
@@ -125,7 +116,9 @@ func (m *Midi) ParseTrack(no int) error {
 				binary.Read(m.r, binary.BigEndian, buf[:buf[3]])
 			case 0x2F:
 				// End of track
-				remain = 0
+				if remain != 0 {
+					return fmt.Errorf("ParseTrack() : size error")
+				}
 			case 0x51:
 				// Set Tempo
 				binary.Read(m.r, binary.BigEndian, buf[:buf[3]])
@@ -137,11 +130,13 @@ func (m *Midi) ParseTrack(no int) error {
 				binary.Read(m.r, binary.BigEndian, buf[:buf[3]])
 			}
 		default:
+			remain -= 4
 			switch buf[1] & 0xF0 {
 			case 0xB0:
 				// control change
 			case 0xC0:
 				// program change
+				remain += 1
 				m.r.Seek(-1, io.SeekCurrent)
 			case 0x90:
 			case 0x80:

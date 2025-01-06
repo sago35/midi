@@ -23,6 +23,10 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	if baremetal {
+		fmt.Printf("done\n")
+	}
 }
 
 //go:embed "overworld.mid"
@@ -38,8 +42,10 @@ func run() error {
 		if no != 1 {
 			//continue
 		}
-		m.ParseTrack(no)
+		err := m.ParseTrack(no)
+		if err != nil {
+			return err
+		}
 	}
-	fmt.Printf("done\n")
 	return nil
 }
