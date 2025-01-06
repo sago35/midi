@@ -92,28 +92,30 @@ func (m *Midi) ParseTrack(no int) error {
 	//fmt.Printf("size   : %04X\n", size)
 
 	remain := size
-	var buf [256]byte
+	var buf [5]byte
+	var buf2 [256]byte
 	for remain > 0 {
 		binary.Read(m.r, binary.BigEndian, buf[:4])
 
+		bufSize := 4
 		delta := uint16(buf[0])
 		if delta&0x80 == 0x00 {
-			//fmt.Printf("buf  : % X\n", buf[:4])
 		} else {
 			m.r.Seek(-3, io.SeekCurrent)
 
 			binary.Read(m.r, binary.BigEndian, buf[:4])
-			//fmt.Printf("buf  : %02X % X\n", delta, buf[:4])
 			remain -= 1
+			bufSize = 5
 		}
 
+		sz := buf[3]
 		switch buf[1] {
 		case 0xFF:
 			// meta event
-			remain -= 4 + uint32(buf[3])
+			remain -= 4 + uint32(sz)
 			switch buf[2] {
 			case 0x03:
-				binary.Read(m.r, binary.BigEndian, buf[:buf[3]])
+				binary.Read(m.r, binary.BigEndian, buf2[:sz])
 			case 0x2F:
 				// End of track
 				if remain != 0 {
@@ -121,15 +123,16 @@ func (m *Midi) ParseTrack(no int) error {
 				}
 			case 0x51:
 				// Set Tempo
-				binary.Read(m.r, binary.BigEndian, buf[:buf[3]])
+				binary.Read(m.r, binary.BigEndian, buf2[:sz])
 			case 0x58:
 				// Time Signature
-				binary.Read(m.r, binary.BigEndian, buf[:buf[3]])
+				binary.Read(m.r, binary.BigEndian, buf2[:sz])
 			default:
 				fmt.Printf("error : unknown buf[2] : %02X\n", buf[2])
-				binary.Read(m.r, binary.BigEndian, buf[:buf[3]])
+				binary.Read(m.r, binary.BigEndian, buf2[:sz])
 			}
 		default:
+			sz = 0
 			remain -= 4
 			switch buf[1] & 0xF0 {
 			case 0xB0:
@@ -137,12 +140,18 @@ func (m *Midi) ParseTrack(no int) error {
 			case 0xC0:
 				// program change
 				remain += 1
+				bufSize -= 1
 				m.r.Seek(-1, io.SeekCurrent)
 			case 0x90:
 			case 0x80:
 			default:
 				fmt.Printf("error : unknown buf[1] : %02X\n", buf[1])
 			}
+		}
+		if sz == 0 {
+			//fmt.Printf("% X\n", buf[:bufSize])
+		} else {
+			//fmt.Printf("% X % X\n", buf[:bufSize], buf2[:sz])
 		}
 	}
 
