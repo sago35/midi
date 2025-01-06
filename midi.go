@@ -102,8 +102,8 @@ func (m *Midi) ParseTrack(no int) error {
 	fmt.Printf("size   : %04X\n", size)
 
 	remain := size
+	var buf [256]byte
 	for remain > 0 {
-		var buf [256]byte
 		binary.Read(m.r, binary.BigEndian, buf[:4])
 
 		delta := uint16(buf[0])
