@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	_ "embed"
+	"fmt"
 	"log"
 	"time"
 
@@ -39,5 +40,6 @@ func run() error {
 		}
 		m.ParseTrack(no)
 	}
+	fmt.Printf("done\n")
 	return nil
 }
