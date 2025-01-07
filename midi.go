@@ -11,7 +11,7 @@ type Midi struct {
 	r   Reader
 	buf [256]byte
 
-	trackPos [16]int64
+	trackOfs [16]int64
 	trackNum int
 }
 
@@ -61,7 +61,7 @@ func (m *Midi) ParseHeader() error {
 				break
 			}
 		}
-		m.trackPos[idx] = currentPos
+		m.trackOfs[idx] = currentPos
 
 		binary.Read(m.r, binary.BigEndian, &size)
 		m.r.Seek(int64(size), io.SeekCurrent)
@@ -78,10 +78,10 @@ func (m *Midi) TrackNum() int {
 func (m *Midi) ParseTrack(no int) error {
 	//fmt.Printf("-- track %d --\n", no)
 
-	if len(m.trackPos) < no {
-		return fmt.Errorf("len(m.trackPos) < no")
+	if len(m.trackOfs) < no {
+		return fmt.Errorf("len(m.trackOfs) < no")
 	}
-	m.r.Seek(m.trackPos[no], io.SeekStart)
+	m.r.Seek(m.trackOfs[no], io.SeekStart)
 
 	var mtrk [4]byte
 	binary.Read(m.r, binary.BigEndian, &mtrk)
