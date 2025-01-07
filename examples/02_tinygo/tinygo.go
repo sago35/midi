@@ -20,16 +20,16 @@ func init() {
 	m := midi.Port()
 	midiCallback = func(track int, data []byte) {
 		//fmt.Printf("callback(%d, %#v)\n", track, data)
-		switch data[1] & 0xF0 {
+		switch data[0] & 0xF0 {
 		case 0xC0:
-			channel := (data[1] & 0x0F) + 1
-			m.Write(programChange(cable, channel, data[2]))
+			channel := (data[0] & 0x0F) + 1
+			m.Write(programChange(cable, channel, data[1]))
 		case 0x90:
-			channel := (data[1] & 0x0F) + 1
-			m.NoteOn(cable, channel, midi.Note(data[2]), data[3])
+			channel := (data[0] & 0x0F) + 1
+			m.NoteOn(cable, channel, midi.Note(data[1]), data[2])
 		case 0x80:
-			channel := (data[1] & 0x0F) + 1
-			m.NoteOff(cable, channel, midi.Note(data[2]), data[3])
+			channel := (data[0] & 0x0F) + 1
+			m.NoteOff(cable, channel, midi.Note(data[1]), data[2])
 		}
 	}
 
@@ -53,17 +53,17 @@ func init() {
 				autoPlay = false
 				for !btn.Get() {
 				}
-				timeout = time.Now().Add(2 * time.Second)
+				timeout = time.Now().Add(2000 * time.Millisecond)
 			}
 			newValue := enc.Position()
 			if newValue != oldValue {
 				autoPlay = false
 				oldValue = newValue
-				timeout = time.Now().Add(1 * time.Second)
+				timeout = time.Now().Add(500 * time.Millisecond)
 			}
-			time.Sleep(5 * time.Millisecond)
+			time.Sleep(time.Duration(tickTimeMicrosecond) * time.Microsecond)
 		} else {
-			if tick%4 > 0 {
+			if tick%int(20_000/tickTimeMicrosecond) > 0 {
 				return
 			}
 			for {
@@ -74,7 +74,7 @@ func init() {
 				newValue := enc.Position()
 				if newValue != oldValue {
 					oldValue = newValue
-					timeout = time.Now().Add(1 * time.Second)
+					timeout = time.Now().Add(500 * time.Millisecond)
 					break
 				}
 			}

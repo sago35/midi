@@ -11,6 +11,9 @@ import (
 	"github.com/sago35/midi"
 )
 
+//go:embed "overworld.mid"
+var midiData []byte
+
 var (
 	baremetal = false
 )
@@ -30,16 +33,15 @@ func main() {
 	}
 }
 
-//go:embed "overworld.mid"
-var midiData []byte
-
 var midiCallback = func(track int, data []byte) {
-	fmt.Printf("callback(%d, %#v)\n", track, data)
+	//fmt.Printf("callback(%d, %#v)\n", track, data)
 }
 
 var ticker = func(tick int) {
-	//time.Sleep(5 * time.Millisecond)
+	//time.Sleep(time.Duration(tickTimeMicrosecond) * time.Microsecond)
 }
+
+var tickTimeMicrosecond uint32 = 5000
 
 func run() error {
 	r := bytes.NewReader(midiData)
@@ -47,6 +49,8 @@ func run() error {
 	m := midi.New(r)
 	m.SetCallback(midiCallback)
 	m.ParseHeader()
+
+	tickTimeMicrosecond = m.TickTimeMicrosecond()
 
 	for {
 		m.Init()
@@ -63,7 +67,7 @@ func run() error {
 				err := m.TickTrack(no, i)
 				if err != nil {
 					if errors.Is(err, midi.EndOfTrack) {
-						fmt.Printf("finished %d\n", no)
+						//fmt.Printf("finished %d\n", no)
 						finished[no] = true
 					} else {
 						return err
