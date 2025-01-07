@@ -38,13 +38,19 @@ func run() error {
 
 	m.ParseHeader()
 
-	for no := 0; no < m.TrackNum(); no++ {
-		if no != 1 {
-			//continue
-		}
-		err := m.ParseTrack(no)
-		if err != nil {
-			return err
+	for i := 0; i < 999999; i++ {
+		for no := 0; no < m.TrackNum(); no++ {
+			if no != 4 {
+				//continue
+			}
+			//err := m.ParseTrack(no)
+			//if err != nil {
+			//	return err
+			//}
+			err := m.TickTrack(no, i)
+			if err != nil {
+				return err
+			}
 		}
 	}
 	return nil

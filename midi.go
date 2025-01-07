@@ -12,6 +12,9 @@ type Midi struct {
 	buf [256]byte
 
 	trackOfs [16]int64
+	trackPtr [16]int64
+	trackTim [16]uint16
+	trackSiz [16]uint32
 	trackNum int
 }
 
@@ -73,6 +76,106 @@ func (m *Midi) ParseHeader() error {
 
 func (m *Midi) TrackNum() int {
 	return m.trackNum
+}
+
+func (m *Midi) TickTrack(no, tick int) error {
+	if len(m.trackOfs) < no {
+		return fmt.Errorf("len(m.trackOfs) < no")
+	}
+	if m.trackOfs[no]+int64(m.trackSiz[no]) < m.trackPtr[no] {
+		return nil
+	}
+
+	//fmt.Printf("-- tick %d --\n", tick)
+	//fmt.Printf("ofs %04X\n", m.trackOfs[no])
+	//fmt.Printf("ptr %04X\n", m.trackPtr[no])
+	//fmt.Printf("tim %04X\n", m.trackTim[no])
+
+	if m.trackPtr[no] == 0 {
+		m.trackPtr[no] = m.trackOfs[no]
+		m.r.Seek(m.trackPtr[no], io.SeekStart)
+		var mtrk [4]byte
+		binary.Read(m.r, binary.BigEndian, &mtrk)
+
+		var size uint32
+		binary.Read(m.r, binary.BigEndian, &size)
+		m.trackSiz[no] = size
+
+		m.trackPtr[no] += 8
+	}
+	m.r.Seek(m.trackPtr[no], io.SeekStart)
+
+	var buf [5]byte
+	var buf2 [256]byte
+	cont := true
+	for cont {
+		binary.Read(m.r, binary.BigEndian, buf[:4])
+
+		bufSize := int64(4)
+		delta := uint16(buf[0])
+		if delta&0x80 == 0x00 {
+		} else {
+			m.r.Seek(-3, io.SeekCurrent)
+
+			binary.Read(m.r, binary.BigEndian, buf[:4])
+			bufSize = 5
+
+			delta = ((delta & 0x7F) << 7) | uint16(buf[0])
+		}
+
+		//fmt.Printf("tim+delta %d : tick %d : delta %d\n", m.trackTim[no]+delta, uint16(tick), delta)
+		if m.trackTim[no]+delta > uint16(tick) {
+			m.r.Seek(-1*bufSize, io.SeekCurrent)
+			break
+		}
+
+		sz := buf[3]
+		switch buf[1] {
+		case 0xFF:
+			// meta event
+			switch buf[2] {
+			case 0x03:
+				binary.Read(m.r, binary.BigEndian, buf2[:sz])
+			case 0x2F:
+				// End of track
+				//return fmt.Errorf("end of track")
+				//return nil
+				cont = false
+			case 0x51:
+				// Set Tempo
+				binary.Read(m.r, binary.BigEndian, buf2[:sz])
+			case 0x58:
+				// Time Signature
+				binary.Read(m.r, binary.BigEndian, buf2[:sz])
+			default:
+				fmt.Printf("error : unknown buf[2] : %02X\n", buf[2])
+				binary.Read(m.r, binary.BigEndian, buf2[:sz])
+			}
+		default:
+			sz = 0
+			switch buf[1] & 0xF0 {
+			case 0xB0:
+				// control change
+			case 0xC0:
+				// program change
+				bufSize -= 1
+				m.r.Seek(-1, io.SeekCurrent)
+			case 0x90:
+			case 0x80:
+			default:
+				fmt.Printf("error : unknown buf[1] : %02X\n", buf[1])
+			}
+		}
+		if sz == 0 {
+			//fmt.Printf("%d % X\n", no, buf[:bufSize])
+		} else {
+			//fmt.Printf("%d % X % X\n", no, buf[:bufSize], buf2[:sz])
+		}
+		m.trackPtr[no] += bufSize + int64(sz)
+		m.trackTim[no] += delta
+	}
+
+	return nil
 }
 
 func (m *Midi) ParseTrack(no int) error {
