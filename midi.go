@@ -16,6 +16,8 @@ type Midi struct {
 	trackTim [16]uint16
 	trackSiz [16]uint32
 	trackNum int
+
+	callback func(track int, data []byte)
 }
 
 type Reader interface {
@@ -26,8 +28,20 @@ type Reader interface {
 
 func New(r Reader) *Midi {
 	return &Midi{
-		r: r,
+		r:        r,
+		callback: func(track int, data []byte) {},
 	}
+}
+
+func (m *Midi) Init() {
+	for i := range m.trackPtr {
+		m.trackPtr[i] = 0
+		m.trackTim[i] = 0
+	}
+}
+
+func (m *Midi) SetCallback(fn func(track int, data []byte)) {
+	m.callback = fn
 }
 
 func (m *Midi) ParseHeader() error {
@@ -161,10 +175,13 @@ func (m *Midi) TickTrack(no, tick int) error {
 				bufSize -= 1
 				m.r.Seek(-1, io.SeekCurrent)
 			case 0x90:
+				// note on
 			case 0x80:
+				// note off
 			default:
 				fmt.Printf("error : unknown buf[1] : %02X\n", buf[1])
 			}
+			m.callback(no, buf[:bufSize])
 		}
 		if sz == 0 {
 			//fmt.Printf("%d % X\n", no, buf[:bufSize])
@@ -175,8 +192,16 @@ func (m *Midi) TickTrack(no, tick int) error {
 		m.trackTim[no] += delta
 	}
 
+	if cont == false {
+		return EndOfTrack
+	}
+
 	return nil
 }
+
+var (
+	EndOfTrack = errors.New("end of track")
+)
 
 func (m *Midi) ParseTrack(no int) error {
 	//fmt.Printf("-- track %d --\n", no)
