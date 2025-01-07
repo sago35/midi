@@ -21,6 +21,8 @@ type Midi struct {
 
 	tempo uint32
 	ticks uint16
+
+	lastCommand uint8
 }
 
 type Reader interface {
@@ -186,29 +188,48 @@ func (m *Midi) TickTrack(no, tick int) error {
 		default:
 			sz = 0
 			switch buf[0] & 0xF0 {
+			case 0x80:
+				// Note Off
+				m.lastCommand = buf[0]
+			case 0x90:
+				// Note On
+				m.lastCommand = buf[0]
 			case 0xA0:
 				// Polyphonic Key Pressure
+				m.lastCommand = buf[0]
 			case 0xB0:
-				// control change
-				//bufSize -= 1
-				//m.r.Seek(-1, io.SeekCurrent)
+				// Control Change
+				m.lastCommand = buf[0]
 			case 0xC0:
-				// program change
-				bufSize -= 1
+				// Program Change
+				bufSize = 2
 				m.r.Seek(-1, io.SeekCurrent)
-			case 0x90:
-				// note on
-			case 0x80:
-				// note off
+				m.lastCommand = buf[0]
+			case 0xD0:
+				// Channel Pressure
+				bufSize = 2
+				m.r.Seek(-1, io.SeekCurrent)
+				m.lastCommand = buf[0]
+			case 0xE0:
+				// Pitch Bend Change
+				m.lastCommand = buf[0]
 			default:
-				fmt.Printf("error : unknown buf[0]=%02X : %d % X\n", buf[0], no, buf)
+				//fmt.Printf("error : unknown buf[0]=%02X : %d % X\n", buf[0], no, buf)
+				switch m.lastCommand {
+				case 0xC0, 0xD0:
+					bufSize = 1
+				default:
+					bufSize = 2
+				}
+				m.r.Seek(-1, io.SeekCurrent)
+				buf[0], buf[1], buf[2] = m.lastCommand, buf[0], buf[1]
 			}
-			m.callback(no, buf[:bufSize])
+			m.callback(no, buf[:])
 		}
 		if sz == 0 {
-			//fmt.Printf("%d - % X - % X\n", no, buf3[:deltaSize], buf[:bufSize])
+			//fmt.Printf("%d - %04X / %04X - % X - % X\n", no, m.trackOfs[no]+int64(m.trackSiz[no]), m.trackPtr[no], buf3[:deltaSize], buf[:])
 		} else {
-			//fmt.Printf("%d - % X - % X - % X\n", no, buf3[:deltaSize], buf[:bufSize], buf2[:sz])
+			//fmt.Printf("%d - %04X / %04X - % X - % X - % X\n", no, m.trackOfs[no]+int64(m.trackSiz[no]), m.trackPtr[no], buf3[:deltaSize], buf[:bufSize], buf2[:sz])
 		}
 		m.trackPtr[no] += int64(deltaSize) + bufSize + int64(sz)
 		m.trackTim[no] += delta
